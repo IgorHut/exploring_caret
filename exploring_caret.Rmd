@@ -1,0 +1,404 @@
+---
+title: "Exploring the `caret` package"
+output:
+  html_notebook:
+    toc: yes
+  html_document:
+    toc: yes
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+## Cros-validation for model performance estimation
+
+- multiple systematic test sets, rather than a single random train/test split
+- `caret` supports various types of cross-validation
+-  type of cross-validation as well as the number of cross-validation folds can be specified with the `trainControl()` function, which is passed to the `trControl` argument in `train()`:
+
+```{r, eval=FALSE, message=FALSE, warning=FALSE}
+model <- train(
+  y ~ ., my_data,
+  method = "lm",
+  trControl = trainControl(
+    method = "cv", number = 10,
+    verboseIter = TRUE
+  )
+)
+```
+- It's important to note that the method for modeling is passed to the main `train()` function and the method for cross-validation to the `trainControl()` function.
+
+### Example 1
+
+```{r}
+# Fit lm model using 10-fold CV: model
+
+library(caret)
+
+model <- train(
+  price ~ ., diamonds,
+  method = "lm",
+  trControl = trainControl(
+    method = "cv", 
+    number = 10,
+    verboseIter = TRUE
+  )
+)
+
+# Print model to console
+model
+```
+- It is possible to perform more than on iteration of cross-validation.
+- Repeated cross-validation provides a better estimate of the test-set error. 
+- Morover the whole cv procedure can be repeated. This takes longer but gives many more out-of-sample datasets to check and hence enables more precise assesment of model performance.
+- One of the awesome things about the `train()` function in `caret` is how easy it is to run very different models or methods of cross-validation just by tweaking a few simple arguments to the function call. 
+- For example, you could repeat your entire cross-validation procedure 5 times for greater confidence in your estimates of the model's out-of-sample accuracy, e.g.:
+
+```{r, eval=FALSE, message=FALSE, warning=FALSE}
+trControl = trainControl(
+  method = "cv", number = 5,
+  repeats = 5 # verboseIter = TRUE
+)
+```
+
+### Example 2
+
+- Let's compare estimation of the model accuracy using "lm" on the "Boston" data set.
+- Fitst we'll do 5 fold cros-validation and than repeat the whole procedure but this time we'll do five rounds of 5 fold cross-validation:
+
+```{r}
+library(MASS)
+
+set.seed(333)
+
+# Fit lm model using 5-fold CV: model
+model <- train(
+  medv ~ ., Boston,
+  method = "lm",
+  trControl = trainControl(
+    method = "cv", number = 5
+    # verboseIter = TRUE
+  )
+)
+
+# Print model to console
+model
+
+# Fit lm model using 5 x 5-fold CV: model
+model <- train(
+  medv ~ ., Boston,
+  method = "lm",
+  trControl = trainControl(
+    method = "cv", number = 5,
+    repeats = 5 # verboseIter = TRUE
+  )
+)
+
+# Print model to console
+model
+
+```
+
+## Further customisation of the `trainControl` function - using AUC (instead of accuracy) for model tuning
+
+- The `trainControl()` function in `caret` can be adjusted to use AUC (instead of acccuracy), to tune the parameters of trained models. 
+- The `twoClassSummary()` convenience function allows for this to be done easily.
+- IMPORTANT NOTE: When using `twoClassSummary()`, be sure to always include the argument `classProbs = TRUE`, otherwise your model will throw an error! (AUC can't be calculated with just class predictions. Class probabilities are needed as well.)
+
+### Example 1
+
+```{r}
+library(mlbench) # This loads a collection of artificial and real-world machine learning benchmark problems, including, e.g., several data sets from the UCI repository.
+library(caTools)
+data("Sonar")
+str(Sonar)
+
+set.seed(33)
+
+# Create trainControl object: myControl
+myControl <- trainControl(
+  method = "repeatedCv",
+  number = 5,
+  repeats = 5,
+  summaryFunction = twoClassSummary,
+  classProbs = TRUE # IMPORTANT!
+  # verboseIter = TRUE
+)
+
+# After creating a custom trainControl object, it's easy to fit caret models that use AUC rather than accuracy to tune and evaluate the model. You can just pass your custom trainControl object to the train() function via the trControl argument.
+
+# Train glm with custom trainControl: model
+model <- train(Class ~., Sonar, method = "glm", trControl = myControl)
+
+# Print model to console
+model
+
+# Let's make separate train and test sets
+inTraining <- createDataPartition(Sonar$Class, p = .7, list = FALSE)
+
+train <- Sonar[inTraining, ]
+test <- Sonar[-inTraining, ]
+
+# Train the model with the train set
+model_1 <- train(Class ~., data = train, method = "glm", family = "binomial", trControl = myControl) # argument family = "binomial" explicetily tells the train to do logistic regression with "glm"
+
+# Predict probabilites, calculate AUC, and draw ROC
+prediction_p <- predict(model_1, test, type = "prob")
+colAUC(prediction_p, test$Class, plotROC = TRUE)
+
+# Predict class, find the confusion matrix and calculate accuracy, sensitivity...
+prediction_c <- predict(model_1, test)
+confusionMatrix(prediction_c, test$Class)
+
+#Let's try another probability trashold and see how the model behaves
+
+# Apply threshold of 0.9: p_class
+p_class <- ifelse(prediction_p$M > 0.9, "M", "R")
+
+# Create confusion matrix
+confusionMatrix(p_class, test$Class)
+```
+
+## Random Forest with `caret`
+
+### Example 
+```{r}
+# Fit random forest: model
+# Set seed
+set.seed(33)
+# Fit a model
+model <- train(Class~.,
+               data = Sonar,
+               method = "ranger",
+               trControl = trainControl(method = "cv", number = 5)
+                             )
+# Let's check the model
+model
+# Plot the results
+plot(model)
+```
+
+- We can determin the "granularity" of the tune grid by the use of the `tuneLength` parameter, which by default has a value 3. Let's try `tuneLength = 10`:
+
+```{r}
+model <- train(Class~.,
+               data = Sonar,
+               method = "ranger",
+               trControl = trainControl(method = "cv", number = 5),
+               tuneLength = 10
+                             )
+# Let's check the model
+model
+# Plot the results
+plot(model)
+
+```
+
+### Custom tuning grids - Example
+
+**Pros and cons of custom tuning**
+
+- Pass custom tuning grids to tuneGrid argument
+- Advantages
+    - Most flexible method for fi!ing caret models
+    - Complete control over how the model is fit
+- Disadvantages
+    - Requires some knowledge of the model
+    - Can dramatically increase run time
+    
+```{r}
+# Define a custom tuning grid
+myGrid <- data.frame(mtry = c(2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30))
+
+# Fit a model with a custom tuning grid
+set.seed(33)
+model <- train(Class ~ ., 
+               data = Sonar, 
+               method = "ranger",
+               trControl = trainControl(method = "cv", number = 5),
+               tuneGrid = myGrid)
+
+# Plot the results
+plot(model)
+
+model
+```
+
+## Introducing `glmnet`
+
+- Extension of glm models with built-in variable selection
+- Helps deal with collinearity and small samples sizes
+- Two primary forms
+- Lasso regression
+    - Penalizes number of non-zero coefficients
+- Ridge regression
+    - Penalizes absolute magnitude of coefficients
+- A!empts to find a parsimonious (i.e. simple) model
+- Pairs well with random forest models - it usualy yields different results
+
+### Tuning glmnet models
+
+- Combination of *lasso* and *ridge* regression
+- Can fit a mix of the two models
+- **alpha [0, 1]**: pure *lasso* to pure *ridge*
+● **lambda (0, infinity)**: size of the penalty
+
+### Example
+
+```{r}
+# Load data
+if (!exists("overfit")) {
+                         url <- "http://s3.amazonaws.com/assets.datacamp.com/production/course_1048/datasets/overfit.csv"
+                         overfit <- read.csv(url)
+                        }
+
+# Make a custom trainControl - use ROC as a model selection criteria
+myControl <- trainControl(
+                           method = "cv", number = 10,
+                           summaryFunction = twoClassSummary,
+                           classProbs = TRUE # Super important!
+                          )
+# Fit a model
+set.seed(33)
+
+model <- train(y ~ ., overfit, method = "glmnet", trControl = myControl)
+
+#Check the model
+model
+
+# Plot results
+plot(model)
+
+# Print maximum ROC statistic
+max(model[["results"]]$ROC)
+
+```
+### `glmnet` with custom `trainControl` and custom tuning grid
+
+- The `glmnet` model actually fits many models at once 
+- This can be exploited by passing a large number of lambda values, which control the amount of penalization in the model - `train()` is "smart"" enough to only fit one model per *alpha* value and pass all of the *lambda* values at once for simultaneous fitting
+- Many models are explored for the "price" of one
+
+### Example
+
+```{r}
+myGrid <- expand.grid(
+                       alpha = 0:1,
+                       lambda = seq(0.0001, 1, length = 20)
+                      )
+
+# Fit the model
+set.seed(42)
+model <- train(y ~., data = overfit, method = "glmnet",
+               tuneGrid = myGrid, trControl = myControl)
+
+# Check the model
+model
+
+# Print maximum ROC statistic
+max((model$results)$ROC)
+
+# Plot the model
+plot(model)
+
+```
+
+## Preprocessing with `caret`
+
+### Dealing with missing values: Median imputation 
+
+- Most models require numbers, can’t handle missing data!
+- Common approach: remove rows with missing data
+    - Can lead to biases in data
+    - Generate over-confident models
+- Beter strategy: median imputation!
+    - Replace missing values with medians
+    - **Works well if data missing at random (MAR)!**
+
+```{r}
+library(mlbench)
+library(dplyr)
+library(purrr)
+data("BreastCancer")
+
+str(BreastCancer)
+
+set.seed(33)
+X <- select(BreastCancer, c(-Class, -Id))
+X <- map(X, as.character) %>% map(as.numeric) %>% as.data.frame()# we need numeric values so we can use adequate "impute" optins in the "preProcess" function!
+# Let's provide some "NA" values so we can play the "imputation" game
+X[sample(1:nrow(X), 50), "Bare.nuclei"] <- NA
+Y <- BreastCancer$Class # VERY IMPORTANT: y has to be a numeric or factor vector, not a data frame!
+sum(is.na(X))
+sum(is.na(Y))
+
+myControl <- trainControl(
+                           method = "cv", number = 10,
+                           summaryFunction = twoClassSummary,
+                           classProbs = TRUE # Super important!
+                           # verboseIter = TRUE
+                          )
+
+model_median <- train(x = X,  y = Y, 
+               method = "glm", 
+               trControl = myControl, 
+               preProcess = "medianImpute"
+               )
+
+# Check the model
+model
+
+```
+
+
+### Dealing with missing values: KNN imputation
+
+- Median imputation is fast, but…
+- Can produce incorrect results if data missing not at random
+- **k-nearest neighbors (KNN) imputation**
+- Imputes based on "similar" non-missing rows
+
+```{r}
+
+set.seed(33)
+
+model_knn <- train(
+               x = X,  y = Y, 
+               method = "glm", 
+               preProcess = "knnImpute",
+               trControl = myControl 
+               )
+
+# Check the model
+model
+
+```
+
+### Comparing models in `caret`
+
+- Let's see how models obtained by "median imputation" and "knn imputation" compare
+- We'll do it in three ways:
+    - the distributions summarized in terms of the percentiles
+    - the distributions summarized as box plots 
+    - and finally the distributions summarized as dot plots
+  
+```{r}
+# collect resamples
+results <- resamples(list(median_impute = model_median, knn_impute = model_knn))
+
+# summarize the distributions
+summary(results)
+
+# boxplots of results
+bwplot(results)
+
+# dot plots of results
+dotplot(results)
+
+dotplot(results, metric = "ROC")
+```
+
+Well it seems that the model which exploits KNN for missing values imputation performs slightly better!
+
+
