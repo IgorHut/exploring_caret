@@ -1,9 +1,9 @@
 ---
 title: "Exploring the `caret` package"
 output:
-  html_notebook:
-    toc: yes
   html_document:
+    toc: yes
+  html_notebook:
     toc: yes
 ---
 ```{r setup, include=FALSE}
@@ -400,5 +400,62 @@ dotplot(results, metric = "ROC")
 ```
 
 Well it seems that the model which exploits KNN for missing values imputation performs slightly better!
+
+### Combining preprocessing methods - Preprocessing cheat sheet
+
+- Start with median imputation
+    - **Try KNN imputation if data missing not at random**
+- For linear models…
+    - Center and scale
+    - Try PCA and spatial sign
+- Tree-based models don't need much preprocessing
+
+```{r}
+
+set.seed(333)
+
+# Fit glm with median imputation: model1
+model1 <- train(
+  x = X, y = Y,
+  method = "glm",
+  trControl = myControl,
+  preProcess = "medianImpute"
+)
+
+# Print model1
+model1
+
+# Fit glm with median imputation and standardization: model2
+model2 <- train(
+  x = X, y = Y,
+  method = "glm",
+  trControl = myControl,
+  preProcess = c("medianImpute", "center", "scale")
+)
+
+# Print model2
+model2
+
+```
+### Handling low-information predictors with `caret`
+
+- Some variables don't contain much information
+- Constant (i.e. no variance)
+- Nearly constant (i.e. low variance)
+- Easy for one fold of CV to end up with constant column
+- Can cause problems for your models
+- Usually it is a good idea to remove extremely low variance variables
+- `caret` contains a utility function called `nearZeroVar()` for removing such variables to save time during modeling
+    - `nearZeroVar()` takes in `x`,i.e. one predictor variable, at a time, then looks at the ratio of the most common value to the second most common value, `freqCut`, and the percentage of distinct values out of the number of total samples, `uniqueCut` 
+    - If the frequency ratio is greater than a pre-specified threshold and the unique value percentage is less than a threshold, we might consider a predictor to be near zero-variance
+    - So `nearZeroVar()` not only removes predictors that have one unique value across samples (zero variance predictors), but also removes predictors that have both:
+        1) few unique values relative to the number of samples and 
+        2) large ratio of the frequency of the most common value to the frequency of the second most common value (near-zero variance predictors).
+    - By default, `caret` uses `freqCut = 19` and `uniqueCut = 10`, which is fairly conservative
+    - To be a little more aggressive, when calling `nearZeroVar()`, recommended values would be: `freqCut = 2` and `uniqueCut = 20` 
+    
+```{r}
+
+```
 
 

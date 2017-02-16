@@ -142,6 +142,8 @@ $(document).ready(function () {
 <li><a href="#dealing-with-missing-values-median-imputation">Dealing with missing values: Median imputation</a></li>
 <li><a href="#dealing-with-missing-values-knn-imputation">Dealing with missing values: KNN imputation</a></li>
 <li><a href="#comparing-models-in-caret">Comparing models in <code>caret</code></a></li>
+<li><a href="#combining-preprocessing-methods---preprocessing-cheat-sheet">Combining preprocessing methods - Preprocessing cheat sheet</a></li>
+<li><a href="#handling-low-information-predictors-with-caret">Handling low-information predictors with <code>caret</code></a></li>
 </ul></li>
 </ul>
 </div>
@@ -210,11 +212,11 @@ model</code></pre>
 ## 
 ## No pre-processing
 ## Resampling: Cross-Validated (10 fold) 
-## Summary of sample sizes: 48545, 48546, 48546, 48546, 48547, 48547, ... 
+## Summary of sample sizes: 48547, 48547, 48546, 48545, 48546, 48547, ... 
 ## Resampling results:
 ## 
-##   RMSE     Rsquared 
-##   1130.99  0.9196621
+##   RMSE      Rsquared 
+##   1160.646  0.9151252
 ## 
 ## Tuning parameter 'intercept' was held constant at a value of TRUE
 ## </code></pre>
@@ -1019,6 +1021,96 @@ dotplot(results)</code></pre>
 <pre class="r"><code>dotplot(results, metric = &quot;ROC&quot;)</code></pre>
 <p><img src="data:image/png;base64,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FQEFQkArAgqEgFYEFAgBrQgoEAJaEVAgBLQioEAIaEVAgRDQioACIaAVAQVCQCsCCoSAVgQUCAGtCCgQAloRUCAEtCKgQAhoRUCBENCKgAIhoBUBBUJAKwIKhIBWBBQIAa0IKBACWhFQIAS0IqBACGhFQIEQ0IqAAiGgFQEFQkArAgqEgFYEFAgBrQgoEAJaEVAgBLQioEAIaEVAgRDQioACIaAVAQVCQCsCCoSAVgQUCAGtCCgQAloRUCAEtCKgQAhoRUCBENCKgAIhoBUBBUJAKwIKhIBWBBQIAa0IKBACWhFQIAS0IqBACGhFQIEQ0IqAAiGgFQEFQkArAgqEgFYEFAgBrQgoEAJaEVAgBLQioEAIaEVAgRDQioACIaAVAQVCQCsCCoSAVgQUCAGtCCgQAloRUCAEtCKgQAhoRUCBENCKgAIhoBUBBUJAKwIKhIBWBBQIAa0IKBACWhFQIAS0IqBACGhFQIEQ0IqAAiGgFQEFQkArAgqEgFYEFAgBrQgoEAJaEVAgBLQioEAIaEVAgRDQioACIaAVAQVCQCsCCoSAVgQUCAGtCCgQAloRUCAEtCKgQAhoRUCBENCKgAIhoBUBBUJAKwIKhIBWBBQIAa0IKBACWhFQIAS0IqBACGhFQIEQ0IqAAiGgFQEFQkArAgqEgFYEFAgBrQgoEAJaEVAgBLQioEAIaEVAgRDQioACIaAVAQVCQCsCCoSAVgQUCAGtCCgQAloRUCAEtCKgQAhoRUCBENCKgAIhoBUBBUJAKwIKhIBWBBQIAa0IKBACWhFQIAS0IqBACGhFQIEQ0IqAAiGgFQEFQkArAgqEgFYEFAgBrQgoEAJaEVAgBLQioEAIaEVAgRDQioACIaAVAQVCQCsCCoSAVgQUCAGtCCgQAloRUCAEtCKgQAhoRUCBENCKgAIhoBUBBUJAKwIKhIBWBBQIAa0IKBACWhFQIAS0IqBACGhFQIEQ0IqAAiGgFQEFQkArAgqEgFYEFAgBrQgoEAJaEVAgBLQioEAIaEVAgRDQioACIaAVAQVCQCsCCoSAVgQUCAGtCCgQAloRUCAEtCKgQAhoRUCBENCKgAIhoBUBBUJAKwIKhIBWBBQIAa0IKBACWhFQIAS0IqBACGhFQIEQ0IqAAiGgFQEFQkArAgqEgFYEFAgBrQgoEAJaEVAgBLQioEAIaEVAgRDQioAC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" width="672" /></p>
 <p>Well it seems that the model which exploits KNN for missing values imputation performs slightly better!</p>
+</div>
+<div id="combining-preprocessing-methods---preprocessing-cheat-sheet" class="section level3">
+<h3>Combining preprocessing methods - Preprocessing cheat sheet</h3>
+<ul>
+<li>Start with median imputation
+<ul>
+<li><strong>Try KNN imputation if data missing not at random</strong></li>
+</ul></li>
+<li>For linear models…
+<ul>
+<li>Center and scale</li>
+<li>Try PCA and spatial sign</li>
+</ul></li>
+<li>Tree-based models don’t need much preprocessing</li>
+</ul>
+<pre class="r"><code>set.seed(333)
+
+# Fit glm with median imputation: model1
+model1 &lt;- train(
+  x = X, y = Y,
+  method = &quot;glm&quot;,
+  trControl = myControl,
+  preProcess = &quot;medianImpute&quot;
+)
+
+# Print model1
+model1</code></pre>
+<pre><code>## Generalized Linear Model 
+## 
+## 699 samples
+##   9 predictor
+##   2 classes: 'benign', 'malignant' 
+## 
+## Pre-processing: median imputation (9) 
+## Resampling: Cross-Validated (10 fold) 
+## Summary of sample sizes: 629, 630, 628, 629, 629, 629, ... 
+## Resampling results:
+## 
+##   ROC        Sens       Spec     
+##   0.9943732  0.9737681  0.9501667
+## 
+## </code></pre>
+<pre class="r"><code># Fit glm with median imputation and standardization: model2
+model2 &lt;- train(
+  x = X, y = Y,
+  method = &quot;glm&quot;,
+  trControl = myControl,
+  preProcess = c(&quot;medianImpute&quot;, &quot;center&quot;, &quot;scale&quot;)
+)
+
+# Print model2
+model2</code></pre>
+<pre><code>## Generalized Linear Model 
+## 
+## 699 samples
+##   9 predictor
+##   2 classes: 'benign', 'malignant' 
+## 
+## Pre-processing: median imputation (9), centered (9), scaled (9) 
+## Resampling: Cross-Validated (10 fold) 
+## Summary of sample sizes: 629, 629, 630, 629, 629, 629, ... 
+## Resampling results:
+## 
+##   ROC        Sens       Spec     
+##   0.9945729  0.9758937  0.9418333
+## 
+## </code></pre>
+</div>
+<div id="handling-low-information-predictors-with-caret" class="section level3">
+<h3>Handling low-information predictors with <code>caret</code></h3>
+<ul>
+<li>Some variables don’t contain much information</li>
+<li>Constant (i.e. no variance)</li>
+<li>Nearly constant (i.e. low variance)</li>
+<li>Easy for one fold of CV to end up with constant column</li>
+<li>Can cause problems for your models</li>
+<li>Usually it is a good idea to remove extremely low variance variables</li>
+<li><code>caret</code> contains a utility function called <code>nearZeroVar()</code> for removing such variables to save time during modeling
+<ul>
+<li><code>nearZeroVar()</code> takes in <code>x</code>,i.e. one predictor variable, at a time, then looks at the ratio of the most common value to the second most common value, <code>freqCut</code>, and the percentage of distinct values out of the number of total samples, <code>uniqueCut</code></li>
+<li>If the frequency ratio is greater than a pre-specified threshold and the unique value percentage is less than a threshold, we might consider a predictor to be near zero-variance</li>
+<li>So <code>nearZeroVar()</code> not only removes predictors that have one unique value across samples (zero variance predictors), but also removes predictors that have both:
+<ol style="list-style-type: decimal">
+<li>few unique values relative to the number of samples and</li>
+<li>large ratio of the frequency of the most common value to the frequency of the second most common value (near-zero variance predictors).</li>
+</ol></li>
+<li>By default, <code>caret</code> uses <code>freqCut = 19</code> and <code>uniqueCut = 10</code>, which is fairly conservative</li>
+<li>To be a little more aggressive, when calling <code>nearZeroVar()</code>, recommended values would be: <code>freqCut = 2</code> and <code>uniqueCut = 20</code></li>
+</ul></li>
+</ul>
 </div>
 </div>
 
