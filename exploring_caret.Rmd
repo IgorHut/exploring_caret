@@ -1,9 +1,9 @@
 ---
 title: "Exploring the `caret` package"
 output:
-  html_document:
-    toc: yes
   html_notebook:
+    toc: yes
+  html_document:
     toc: yes
 ---
 ```{r setup, include=FALSE}
@@ -454,8 +454,83 @@ model2
     - By default, `caret` uses `freqCut = 19` and `uniqueCut = 10`, which is fairly conservative
     - To be a little more aggressive, when calling `nearZeroVar()`, recommended values would be: `freqCut = 2` and `uniqueCut = 20` 
     
+### Handling low-information predictors with `caret`: Example
+
+Zero and near-zero variance predictors, also called constant and almost constant predictors across samples, are often present in a dataset. One frequent reason for this is breaking a categorical variable with many categories into several dummy variables. Hence, when one of the categories have zero observations, it becomes a dummy variable full of zeroes.
+To illustrate this, take a look at what happens when we want to apply Linear Discriminant Analysis (LDA) to the German Credit Data.
+
+    
 ```{r}
+library(MASS)
+
+data(GermanCredit)
+
+model <-  lda(Class ~ ., data = GermanCredit)
 
 ```
+If we take a closer look at those predictors indicated as problematic by `lda` we can see what is the problem. Note that +1 is added to the index since `lda` does not count the target variable when informing you where the problem is.
 
+```{r}
+colnames(GermanCredit)[26 + 1]
+table(GermanCredit[26 + 1])
 
+colnames(GermanCredit)[44 + 1]
+table(GermanCredit[44 + 1])
+```
+**Quick and dirty solution: throw data away**
+
+As we can see above no loan was taken to pay for a vacation and there is no single female in our dataset. A natural first choice is to remove predictors like those. And this is exactly what the function `nearZeroVar` from the `caret` package does. It will not only remove predictors that have one unique value across samples (zero variance predictors), but also, as explained, predictors that have both 1) few unique values relative to the number of samples and 2) large ratio of the frequency of the most common value to the frequency of the second most common value (near-zero variance predictors).
+
+So let's filter out the variables (predictors) which satisfy these conditions.
+
+```{r}
+x = nearZeroVar(GermanCredit, saveMetrics = TRUE)
+str(x)
+
+# Be aware that predictors are now used as row names for "x"!
+head(row.names(x))
+head(x)
+```
+We can see above that if we call the `nearZeroVar` function with the argument `saveMetrics = TRUE` we have access to the frequency ratios and the percentages of unique values for each predictor, as well as flags that indicates if the variables are considered zero variance or near-zero variance predictors. By default, a predictor is classified as near-zero variance if the percentage of unique values in the samples is less than 10% and when the frequency ratio mentioned above is greater than 19 (95/5). As already mentioned these default values can be changed by setting the arguments `uniqueCut` and `freqCut`.
+
+Let's explore which ones are the zero variance predictors:
+
+```{r}
+x[x[,"zeroVar"] == TRUE, ]
+```
+And which are the near zero variance predictors (these will also include the zero variance predictors):
+```{r}
+x[x[, "nzv"] == TRUE, ]
+```
+Let's now remove these predictors, by hand, and by using a bit more aggressive values for `freqCut` and `uniqueCut`  and conduct the LDA once again:
+
+```{r}
+# Identify near zero variance predictors: remove_cols
+remove_cols <- nearZeroVar(subset(GermanCredit, select = -Class), 
+                           names = TRUE, freqCut = 10, uniqueCut = 15) # Just take care not to drop out the Class variable
+
+# Get all column names from GermanCredit: all_cols
+all_cols <- names(GermanCredit)
+
+# Remove from data: german_no_nzv
+german_no_nzv <- GermanCredit[ , setdiff(all_cols, remove_cols)]
+str(german_no_nzv)
+ 
+model1 <-  lda(Class ~ ., data = german_no_nzv)
+model1
+plot(model1)
+ 
+# or by using the "train" function from "caret" 
+model2 <- train(Class ~., data = german_no_nzv, method = "lda")
+model2
+
+# and finally usin the "preProcess"" function inside the "train" function
+
+model3 <- train(Class ~.,
+                data = GermanCredit,
+                method = "lda", 
+                preProcess = c("nzv"))
+model3
+```
+
+### PCA with `caret`
