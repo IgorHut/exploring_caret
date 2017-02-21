@@ -1,15 +1,17 @@
 ---
 title: "Exploring the `caret` package"
+author: Igor Hut
 output:
-  html_notebook:
-    toc: yes
   html_document:
+    toc: yes
+  html_notebook:
     toc: yes
 ---
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
 
+***This material is mostly based on Max Kuhn's tutorial for the `caret` package, as well as the course he made together with Zachary Deane-Mayer for DataCamp***
 
 ## Cros-validation for model performance estimation
 
@@ -51,7 +53,7 @@ model
 ```
 - It is possible to perform more than on iteration of cross-validation.
 - Repeated cross-validation provides a better estimate of the test-set error. 
-- Morover the whole cv procedure can be repeated. This takes longer but gives many more out-of-sample datasets to check and hence enables more precise assesment of model performance.
+- Moreover the whole cv procedure can be repeated. This takes longer but gives many more out-of-sample datasets to check and hence enables more precise assessment of model performance.
 - One of the awesome things about the `train()` function in `caret` is how easy it is to run very different models or methods of cross-validation just by tweaking a few simple arguments to the function call. 
 - For example, you could repeat your entire cross-validation procedure 5 times for greater confidence in your estimates of the model's out-of-sample accuracy, e.g.:
 
@@ -65,7 +67,7 @@ trControl = trainControl(
 ### Example 2
 
 - Let's compare estimation of the model accuracy using "lm" on the "Boston" data set.
-- Fitst we'll do 5 fold cros-validation and than repeat the whole procedure but this time we'll do five rounds of 5 fold cross-validation:
+- First we'll do 5 fold cross-validation and than repeat the whole procedure but this time we'll do five rounds of 5 fold cross-validation:
 
 ```{r}
 library(MASS)
@@ -102,7 +104,7 @@ model
 
 ## Further customisation of the `trainControl` function - using AUC (instead of accuracy) for model tuning
 
-- The `trainControl()` function in `caret` can be adjusted to use AUC (instead of acccuracy), to tune the parameters of trained models. 
+- The `trainControl()` function in `caret` can be adjusted to use AUC (instead of accuracy), to tune the parameters of trained models. 
 - The `twoClassSummary()` convenience function allows for this to be done easily.
 - IMPORTANT NOTE: When using `twoClassSummary()`, be sure to always include the argument `classProbs = TRUE`, otherwise your model will throw an error! (AUC can't be calculated with just class predictions. Class probabilities are needed as well.)
 
@@ -179,7 +181,7 @@ model
 plot(model)
 ```
 
-- We can determin the "granularity" of the tune grid by the use of the `tuneLength` parameter, which by default has a value 3. Let's try `tuneLength = 10`:
+- We can determine the "granularity" of the tune grid by the use of the `tuneLength` parameter, which by default has a value 3. Let's try `tuneLength = 10`:
 
 ```{r}
 model <- train(Class~.,
@@ -201,7 +203,7 @@ plot(model)
 
 - Pass custom tuning grids to tuneGrid argument
 - Advantages
-    - Most flexible method for fi!ing caret models
+    - Most flexible method for filling caret models
     - Complete control over how the model is fit
 - Disadvantages
     - Requires some knowledge of the model
@@ -234,8 +236,8 @@ model
     - Penalizes number of non-zero coefficients
 - Ridge regression
     - Penalizes absolute magnitude of coefficients
-- A!empts to find a parsimonious (i.e. simple) model
-- Pairs well with random forest models - it usualy yields different results
+- Attempts to find a parsimonious (i.e. simple) model
+- Pairs well with random forest models - it usually yields different results
 
 ### Tuning glmnet models
 
@@ -460,7 +462,7 @@ Zero and near-zero variance predictors, also called constant and almost constant
 To illustrate this, take a look at what happens when we want to apply Linear Discriminant Analysis (LDA) to the German Credit Data.
 
     
-```{r}
+```{r error=TRUE}
 library(MASS)
 
 data(GermanCredit)
@@ -529,8 +531,158 @@ model2
 model3 <- train(Class ~.,
                 data = GermanCredit,
                 method = "lda", 
-                preProcess = c("nzv"))
+                preProcess = "nzv"
+                )
 model3
 ```
 
-### PCA with `caret`
+### PCA with `caret`: using PCA as an alternative to `nearZeroVar()`
+
+- An alternative to removing low-variance predictors is to run PCA on your dataset - - This is sometimes preferable because it does not throw out all of your data: 
+    - **many different low variance predictors may end up combined into one high variance PCA variable, which might have a positive impact on your model's accuracy**
+    
+- This is an especially good trick for linear models: the `pca` option in the `preProcess` argument will center and scale your data, combine low variance variables, and ensure that all of your predictors are orthogonal
+    - **This creates an ideal dataset for linear regression modeling, and can often improve the accuracy of your models**
+    
+```{r}
+
+# Fit "lda" model using PCA: model
+model4 <- train(Class ~.,
+                data = GermanCredit,
+                method = "lda", 
+                preProcess = c("zv", "center", "scale", "pca")
+               )
+
+# Print model to console
+model4
+```
+
+## Comparing models - extensive example and more details
+
+We'll go through a real-world example:
+
+- The data that will be used for the exaple: customer churn at telecom company (package c50)
+- Fit different models and choose the best
+- **Models must use the same training/test splits!**
+- Create a shared `trainControl` object
+
+```{r}
+# Summarize the target variables
+library(caret)
+library(C50)
+data(churn)
+
+str(churnTrain)
+
+prop.table(table(churnTrain$churn))
+
+# Create train/test indices
+set.seed(33)
+myFolds <- createFolds(churnTrain$churn, k = 5) #This creates folds which preserve the class distribution!
+
+# Check whether the class distributions are preserverd inside the folds
+i <- myFolds$Fold1
+prop.table(table(churnTrain$churn[i]))
+
+# Use these folds to create a reusable trainControl object, so that we can exploit the exact same cross-validation folds for each model: myControl
+myControl <- trainControl(
+  summaryFunction = twoClassSummary,
+  classProbs = TRUE, # IMPORTANT!
+  verboseIter = TRUE,
+  savePredictions = TRUE,
+  index = myFolds
+)
+
+```
+First model that we are going to fit to our data will be the "good, old" `glmnet`. So let's recap on basic features of this algorithm:
+- Linear model with built-in variable selection
+- Great baseline model
+- Advantages
+    - Fits quickly
+    - Ignores noisy variables
+    - Provides interpretable coefficients
+
+```{r}
+# Fit the model
+set.seed(33)
+model_glmnet <- train(
+                      churn ~ ., 
+                      data = churnTrain,
+                      metric = "ROC",
+                      method = "glmnet",
+                      tuneGrid = expand.grid(
+                                             alpha = 0:1,
+                                             lambda = 0:10/10
+                                            ),
+                      trControl = myControl
+                     )
+# Check the model
+model_glmnet
+
+# Plot the results
+plot(model_glmnet)
+
+# Plot the coefficients
+plot(model_glmnet$finalModel)
+```
+Next algorithm that we are going to use for modeling the data is the random forest. Here is a quick review of this frequently used maschine learning algorithm:
+- Slower to fit than `glmnet`
+- Less interpretable
+- Ofteen (but not always) more accurate than `glmnet`
+- Easier to tune
+- Requires little preprocessing
+- Captures threshold effects and variable interactions
+
+
+```{r}
+
+set.seed(33)
+
+model_rf <- train(
+                  churn ~ ., churnTrain,
+                  metric = "ROC",
+                  method = "ranger",
+                  trControl = myControl
+                  )
+model_rf
+plot(model_rf)
+```
+### Comparing models
+
+- Make sure they were fit on the same data!
+- Selection criteria
+- Highest average AUC
+- Lowest standard deviation in AUC
+- The `resamples()` function is your friend
+
+```{r}
+# Make a list containing models to be compared
+model_list <- list(
+                   glmnet = model_glmnet,
+                   rf = model_rf
+                  )
+
+# Collect resamples from the CV folds
+resamps <- resamples(model_list)
+resamps
+
+# Summarize the results
+summary(resamps)
+
+# Box-and-whisker plot
+bwplot(resamps)
+
+# Or if we are interested only in ROC AUC
+bwplot(resamps, metric = "ROC")
+
+# Dot plot
+dotplot(resamps, metric = "ROC")
+
+# Density plot
+densityplot(resamps, metric = "ROC") # A usefull way to look for outlier folds with unusually high or low AUC
+
+# Scatter plot
+xyplot(resamps, metric = "ROC") # in this case showing that for all cv folds rf provides better performance in terms of ROC AUC
+
+```
+
